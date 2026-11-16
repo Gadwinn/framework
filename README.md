@@ -130,7 +130,27 @@ return static function (RouterInterface $router): void {
 };
 ```
 
-See [`gadwinn/router`](https://github.com/Gadwinn/router) for patterns, groups and reverse URLs.
+Routes can also be declared on the controllers with the `#[Group]` (class) and `#[Route]`
+(method) attributes of the router, and loaded in one line:
+
+```php
+use G\Router\Attribute\AttributeLoader;
+
+return static function (RouterInterface $router): void {
+    (new AttributeLoader($router))->loadDirectory(dirname(__DIR__) . '/src/Controller', 'App\Controller');
+};
+```
+
+```php
+#[Group('/users', name: 'users.')]
+final class UserController
+{
+    #[Route('/{id:i}', name: 'show')]   // GET /users/{id}, named users.show
+    public function show(int $id): array { /* ... */ }
+}
+```
+
+See [`gadwinn/router`](https://github.com/Gadwinn/router) for patterns, groups, attributes and reverse URLs.
 
 ## Controllers
 
