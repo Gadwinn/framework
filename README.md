@@ -169,7 +169,9 @@ The arguments of the method are resolved, for each parameter, in this order:
 1. typed `ServerRequestInterface` → the request; typed `G\Router\Route\RouteInterface` → the matched route;
 2. named like a route parameter → its value, converted to the declared type (`int`, `float`,
    `bool`, `string`); a value that does not convert (`/users/abc` for an `int`) gives a 404;
-3. typed with a class or an interface → the service from the container;
+3. typed with a class or an interface → the service from the container (an optional
+   parameter such as `?Foo $foo = null` only receives a service defined in
+   `config/services.php`, it is never autowired);
 4. the default value, else `null` when nullable, else a `FrameworkException` naming the
    parameter and the controller.
 

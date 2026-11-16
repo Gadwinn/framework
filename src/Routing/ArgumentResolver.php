@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace G\Framework\Routing;
 
+use G\Container\Container;
 use G\Framework\Exception\FrameworkException;
 use G\Router\Route\RouteInterface;
 use Psr\Container\ContainerInterface;
@@ -17,7 +18,9 @@ use ReflectionParameter;
  * Computes the arguments of a controller, for each parameter in this order of priority:
  *  1. typed with a class the request (or the route) is an instance of → the request (the route);
  *  2. named like a route parameter → its value, converted to the declared scalar type;
- *  3. typed with a class or an interface the container has → the container entry;
+ *  3. typed with a class or an interface the container has → the container entry (an
+ *     optional parameter only receives an entry defined in the container, never a class
+ *     that would merely be autowired);
  *  4. the default value, else null when nullable, else a FrameworkException.
  *
  * Union and intersection types are ignored by the rules 1 to 3.
@@ -75,7 +78,13 @@ final class ArgumentResolver
                 continue;
             }
 
-            if ($className !== null && $this->container->has($className)) {
+            // As in the container, an optional parameter keeps its default value rather than
+            // receiving a class that was never defined and would only be autowired
+            if (
+                $className !== null
+                && ($this->isDefined($className) || !$param->isDefaultValueAvailable())
+                && $this->container->has($className)
+            ) {
                 $arguments[] = $this->container->get($className);
                 continue;
             }
@@ -96,6 +105,18 @@ final class ArgumentResolver
         }
 
         return $arguments;
+    }
+
+    /**
+     * Tell whether an identifier is explicitly defined in the container, as opposed to a
+     * class it would only autowire. Without that information (other PSR-11 containers),
+     * every entry the container has counts as defined.
+     */
+    private function isDefined(string $id): bool
+    {
+        return $this->container instanceof Container
+            ? $this->container->isDefined($id)
+            : $this->container->has($id);
     }
 
     /**
