@@ -117,6 +117,27 @@ final class ArgumentResolverTest extends TestCase
         $this->assertSame(['default', null, null], $args);
     }
 
+    public function testOptionalParameterKeepsItsDefaultRatherThanBeingAutowired(): void
+    {
+        $this->assertSame([null], $this->resolve(static fn (?Greeter $greeter = null) => null));
+    }
+
+    public function testOptionalParameterReceivesADefinedService(): void
+    {
+        $this->container->set(Greeter::class, static fn (): Greeter => new Greeter('Hi'));
+
+        [$greeter] = $this->resolve(static fn (?Greeter $greeter = null) => null);
+
+        $this->assertInstanceOf(Greeter::class, $greeter);
+    }
+
+    public function testRequiredParameterIsAutowired(): void
+    {
+        [$greeter] = $this->resolve(static fn (Greeter $greeter) => null);
+
+        $this->assertInstanceOf(Greeter::class, $greeter);
+    }
+
     public function testNullableWithoutDefault(): void
     {
         $this->assertSame([null], $this->resolve(static fn (?Countable $countable) => null));

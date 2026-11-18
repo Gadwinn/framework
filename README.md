@@ -130,7 +130,27 @@ return static function (RouterInterface $router): void {
 };
 ```
 
-See [`gadwinn/router`](https://github.com/Gadwinn/router) for patterns, groups and reverse URLs.
+Routes can also be declared on the controllers with the `#[Group]` (class) and `#[Route]`
+(method) attributes of the router, and loaded in one line:
+
+```php
+use G\Router\Attribute\AttributeLoader;
+
+return static function (RouterInterface $router): void {
+    (new AttributeLoader($router))->loadDirectory(dirname(__DIR__) . '/src/Controller', 'App\Controller');
+};
+```
+
+```php
+#[Group('/users', name: 'users.')]
+final class UserController
+{
+    #[Route('/{id:i}', name: 'show')]   // GET /users/{id}, named users.show
+    public function show(int $id): array { /* ... */ }
+}
+```
+
+See [`gadwinn/router`](https://github.com/Gadwinn/router) for patterns, groups, attributes and reverse URLs.
 
 ## Controllers
 
@@ -169,7 +189,9 @@ The arguments of the method are resolved, for each parameter, in this order:
 1. typed `ServerRequestInterface` → the request; typed `G\Router\Route\RouteInterface` → the matched route;
 2. named like a route parameter → its value, converted to the declared type (`int`, `float`,
    `bool`, `string`); a value that does not convert (`/users/abc` for an `int`) gives a 404;
-3. typed with a class or an interface → the service from the container;
+3. typed with a class or an interface → the service from the container (an optional
+   parameter such as `?Foo $foo = null` only receives a service defined in
+   `config/services.php`, it is never autowired);
 4. the default value, else `null` when nullable, else a `FrameworkException` naming the
    parameter and the controller.
 
@@ -260,19 +282,32 @@ Your own services must follow the same rule: no state kept from one request to t
 ## Optional packages
 
 Install them with Composer, then enable them in `config/middlewares.php` and, when they need
-configuration, in `config/services.php`:
+configuration, in `config/services.php`. The `gadwinn/skeleton` project ships a commented,
+ready-to-enable block for each of them. Middlewares, in their order in the stack:
 
 | Package | Use |
 |---|---|
-| `gadwinn/error-catcher-middleware` | exceptions and PHP errors → error responses |
 | `gadwinn/trusted-proxy-middleware` | client IP, scheme and host behind a reverse proxy |
+| `gadwinn/error-catcher-middleware` | exceptions and PHP errors → error responses |
+| `gadwinn/fail-sentry-middleware` | blocks the IP addresses that keep failing |
 | `gadwinn/http-method-middleware` | method override (`_method`), PUT/PATCH/DELETE bodies |
 | `gadwinn/csrf` | CSRF protection |
-| `gadwinn/fail-sentry-middleware` | blocks the IP addresses that keep failing |
+
+Services:
+
+| Package | Use |
+|---|---|
 | `gadwinn/dotenv` | `.env` files |
 | `gadwinn/psr-log` | PSR-3 logger |
+| `gadwinn/psr-simple-cache` | PSR-16 cache |
+| `gadwinn/psr-event-dispatcher` | PSR-14 events |
+| `gadwinn/psr-clock` | PSR-20 clock |
+| `gadwinn/psr-http-client` | PSR-18 HTTP client |
 | `gadwinn/orm` | database |
 | `gadwinn/translator` | translations |
+| `gadwinn/validator` | validation |
+| `gadwinn/jwt` | JSON Web Tokens |
+| `gadwinn/debug` | debug bar (development only) |
 
 Example with the proxy middleware, which needs the addresses of the proxies:
 
@@ -282,11 +317,41 @@ G\TrustedProxyMiddleware\TrustedProxyMiddleware::class
     => static fn () => new G\TrustedProxyMiddleware\TrustedProxyMiddleware(['172.18.0.0/16']),
 ```
 
-## Development
+## Debug bar
 
-The `gadwinn/*` packages are not on Packagist yet: `composer.json` reads them from their GitHub
-repositories (`vcs` repositories, `dev-develop` branch). This will be replaced by tagged
-versions.
+`gadwinn/debug` adds a bar at the bottom of the HTML pages (time, memory, request, route, logs,
+SQL, dumps) and a `Server-Timing` header to every response. **Development only**: it exposes
+internal data, so enable it only when `APP_ENV` is `dev`. No change to the framework is
+needed, everything goes through the configuration:
+
+```php
+// config/middlewares.php
+$dev = ($_ENV['APP_ENV'] ?? 'prod') === 'dev';
+
+return [
+    ...($dev ? [G\Debug\DebugBarMiddleware::class] : []),       // first: error pages get the bar
+    // ... other middlewares ...
+    G\Router\Middleware\RouterMiddleware::class,
+    ...($dev ? [G\Debug\CaptureRequestMiddleware::class] : []), // after the router: sees the route
+];
+```
+
+```php
+// config/services.php
+G\Debug\DebugBar::class => static fn (ContainerInterface $c) => new G\Debug\DebugBar(
+    new G\Debug\Collector\TimeMemoryCollector(),
+    new G\Debug\Collector\RequestCollector(),
+    new G\Debug\Collector\RouteCollector(),
+    $c->get(G\Debug\Collector\LogCollector::class),     // also the application's LoggerInterface
+    $c->get(G\Debug\Collector\QueryCollector::class),   // logger of G\Orm\Driver\LoggingConnection
+    $c->get(G\Debug\Collector\DumpCollector::class),
+),
+```
+
+Both middlewares are autowired. See the README of `gadwinn/debug` for the collectors, the SQL
+panel and writing your own collector.
+
+## Development
 
 ```bash
 composer install
