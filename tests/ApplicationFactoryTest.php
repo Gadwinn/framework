@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace G\Framework\Tests;
 
+use ArrayObject;
+use G\Container\Container;
 use G\Framework\ApplicationFactory;
 use G\Framework\Exception\FrameworkException;
 use G\Framework\Exception\FrameworkExceptionInterface;
@@ -78,6 +80,9 @@ final class ApplicationFactoryTest extends TestCase
             'unknown middleware' => [['middlewares.php' => '<?php return ["Unknown\\\\Middleware"];'], 'Unknown\\Middleware'],
             'middleware of a wrong class' => [['middlewares.php' => '<?php return [stdClass::class];'], 'stdClass'],
             'converter of a wrong class' => [['converters.php' => '<?php return [stdClass::class];'], 'stdClass'],
+            'reset not an array' => [['reset.php' => '<?php return "x";'], 'config/reset.php'],
+            'reset without ids' => [['reset.php' => '<?php return [static fn () => null];'], 'config/reset.php'],
+            'reset of a wrong type' => [['reset.php' => '<?php return ["Foo" => "bar"];'], 'config/reset.php'],
         ];
     }
 
@@ -105,6 +110,50 @@ final class ApplicationFactoryTest extends TestCase
         $this->expectExceptionMessage('RouterMiddleware is missing');
 
         $app->handle((new ServerRequestFactory())->createServerRequest('GET', '/'));
+    }
+
+    public function testResetOnlyTouchesTheServicesBuiltDuringTheRequest(): void
+    {
+        $app = ApplicationFactory::fromDirectory($this->project([
+            'services.php' => '<?php return [ArrayObject::class => static fn () => new ArrayObject()];',
+            'routes.php' => '<?php return static function (G\Router\RouterInterface $router): void {'
+                . ' $router->get("/", static fn (): string => "ok");'
+                . ' $router->get("/use", static fn (ArrayObject $o): string => "used"); };',
+            'reset.php' => '<?php return [ArrayObject::class => static function (ArrayObject $o): void {'
+                . ' $o["resets"] = ($o["resets"] ?? 0) + 1; }];',
+        ]));
+        $container = $app->getContainer();
+        $this->assertInstanceOf(Container::class, $container);
+
+        $app->handle((new ServerRequestFactory())->createServerRequest('GET', '/'));
+        $app->reset();
+        $this->assertFalse($container->isResolved(ArrayObject::class), 'never built just to be reset');
+
+        $app->handle((new ServerRequestFactory())->createServerRequest('GET', '/use'));
+        $app->reset();
+        $service = $container->get(ArrayObject::class);
+        $this->assertInstanceOf(ArrayObject::class, $service);
+        $this->assertSame(1, $service['resets']);
+    }
+
+    public function testRunResetsAfterEachRequest(): void
+    {
+        $app = ApplicationFactory::fromDirectory($this->project([
+            'services.php' => '<?php return [ArrayObject::class => static fn () => new ArrayObject(),'
+                . ' G\Http\Emitter\EmitterInterface::class'
+                . ' => G\Framework\Tests\Fixtures\App\RecordingEmitter::class];',
+            'routes.php' => '<?php return static function (G\Router\RouterInterface $router): void {'
+                . ' $router->get("/use", static fn (ArrayObject $o): string => "used"); };',
+            'reset.php' => '<?php return [ArrayObject::class => static function (ArrayObject $o): void {'
+                . ' $o["resets"] = ($o["resets"] ?? 0) + 1; }];',
+        ]));
+
+        $app->run((new ServerRequestFactory())->createServerRequest('GET', '/use'));
+        $app->run((new ServerRequestFactory())->createServerRequest('GET', '/use'));
+
+        $service = $app->getContainer()->get(ArrayObject::class);
+        $this->assertInstanceOf(ArrayObject::class, $service);
+        $this->assertSame(2, $service['resets']);
     }
 
     public function testDefaultServicesAreRegistered(): void

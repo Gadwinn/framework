@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace G\Framework;
 
+use Closure;
+use G\Container\Container;
 use G\Framework\Exception\FrameworkException;
 use G\Framework\Routing\RouteDispatcher;
 use G\Http\Emitter\EmitterInterface;
@@ -19,7 +21,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  * The application: an ordered stack of PSR-15 middlewares ending with the RouteDispatcher.
  *
  * handle() keeps no state between two requests, so one instance can serve any number of
- * requests (FrankenPHP worker mode and other long-running servers).
+ * requests (FrankenPHP worker mode and other long-running servers). Services that do keep a
+ * state (an ORM identity map, a current locale...) are reset by reset(), which run() calls
+ * after each request.
  */
 final class Application implements RequestHandlerInterface
 {
@@ -29,12 +33,15 @@ final class Application implements RequestHandlerInterface
      * @param ContainerInterface $container
      * @param list<string|MiddlewareInterface> $middlewares In order of execution: container ids
      *                                                      (class names) or instances.
+     * @param array<string, Closure(object): void> $resetters Container id => function receiving
+     *                                                      the service to reset after each request.
      *
      * @throws FrameworkException When a middleware cannot be obtained from the container.
      */
     public function __construct(
         private readonly ContainerInterface $container,
         array $middlewares,
+        private readonly array $resetters = [],
     ) {
         $dispatcher = $container->get(RouteDispatcher::class);
         if (!$dispatcher instanceof RequestHandlerInterface) {
@@ -76,7 +83,34 @@ final class Application implements RequestHandlerInterface
             );
         }
 
-        $emitter->emit($this->handle($request ?? ServerRequestFactory::createServerRequestFromGlobals()));
+        try {
+            $emitter->emit($this->handle($request ?? ServerRequestFactory::createServerRequestFromGlobals()));
+        } finally {
+            $this->reset();
+        }
+    }
+
+    /**
+     * Resets the services declared in config/reset.php, so that the next request served by this
+     * application does not inherit their state. run() calls it after each request; call it
+     * yourself after handle() in a custom loop.
+     *
+     * With the container of the framework, a service that was not built during the request is
+     * skipped (it is never built just to be reset). Another PSR-11 container cannot tell, so its
+     * services are always fetched.
+     */
+    public function reset(): void
+    {
+        foreach ($this->resetters as $id => $reset) {
+            if ($this->container instanceof Container && !$this->container->isResolved($id)) {
+                continue;
+            }
+
+            $service = $this->container->get($id);
+            if (is_object($service)) {
+                $reset($service);
+            }
+        }
     }
 
     /**

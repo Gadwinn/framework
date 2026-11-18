@@ -50,6 +50,7 @@ final class ApplicationFactory
     public const string MIDDLEWARES_FILE = 'config/middlewares.php';
     public const string ROUTES_FILE = 'config/routes.php';
     public const string CONVERTERS_FILE = 'config/converters.php';
+    public const string RESET_FILE = 'config/reset.php';
 
     /** Converters of the framework, tried after those of the project */
     private const array CONVERTERS = [
@@ -89,6 +90,17 @@ final class ApplicationFactory
         $converters = self::listOf($converters, static fn (mixed $c): ?string => is_string($c) ? $c : null)
             ?? throw self::invalid(self::CONVERTERS_FILE, 'a list of response converter class names');
 
+        $resetters = is_file($projectDir . '/' . self::RESET_FILE)
+            ? self::load($projectDir, self::RESET_FILE)
+            : [];
+        if (
+            !is_array($resetters)
+            || array_is_list($resetters) && $resetters !== []
+            || array_filter($resetters, static fn (mixed $r): bool => !$r instanceof Closure) !== []
+        ) {
+            throw self::invalid(self::RESET_FILE, 'an array of container id => Closure(object): void');
+        }
+
         $container = new Container();
         foreach ($services as $id => $definition) {
             $container->set((string) $id, $definition);
@@ -101,7 +113,8 @@ final class ApplicationFactory
         }
         $routes($router);
 
-        return new Application($container, $middlewares);
+        /** @var array<string, Closure(object): void> $resetters */
+        return new Application($container, $middlewares, $resetters);
     }
 
     /**
