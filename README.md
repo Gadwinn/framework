@@ -52,6 +52,7 @@ and the emission (PSR-15 `RequestHandlerInterface`).
 | `config/middlewares.php` | `list` of middlewares, in order of execution | yes |
 | `config/routes.php` | `Closure(RouterInterface): void` | yes |
 | `config/converters.php` | `list` of response converter class names | no |
+| `config/reset.php` | `array` of container id => `Closure(object): void` | no |
 
 A missing required file, or a file returning the wrong type, throws a
 `G\Framework\Exception\FrameworkException` naming the file.
@@ -278,6 +279,28 @@ for ($requests = 0; frankenphp_handle_request($handler); $requests++) {
 ```
 
 Your own services must follow the same rule: no state kept from one request to the next.
+
+### Resetting services between requests
+
+Some services keep a state on purpose: the identity map of `gadwinn/orm`, the current locale of
+`gadwinn/translator`... In a worker, the next request would inherit it. Declare how to reset
+them in `config/reset.php`:
+
+```php
+<?php
+// config/reset.php
+return [
+    G\Orm\Contract\DbManagerInterface::class
+        => static fn (G\Orm\Contract\DbManagerInterface $orm) => $orm->unitOfWork()->clear(),
+    G\Translator\Runtime\Translator::class
+        => static fn (G\Translator\Runtime\Translator $translator) => $translator->setLocale('en'),
+];
+```
+
+`run()` calls `Application::reset()` after each request, so the worker loop above needs nothing
+more (call it yourself after `handle()` in a custom loop). A service that was not built during
+the request is skipped: it is never built (nor a database connection opened) just to be reset.
+In classic mode the call is harmless.
 
 ## Optional packages
 
