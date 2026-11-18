@@ -353,10 +353,6 @@ panel and writing your own collector.
 
 ## Development
 
-The `gadwinn/*` packages are not on Packagist yet: `composer.json` reads them from their GitHub
-repositories (`vcs` repositories, `dev-develop` branch). This will be replaced by tagged
-versions.
-
 ```bash
 composer install
 composer test-all   # security audit, code style, static analysis, unit tests, magic numbers

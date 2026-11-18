@@ -5,33 +5,6 @@
     "minimum-stability": "stable",
     "license": "MIT",
     "prefer-stable": true,
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/Gadwinn/psr-http-message",
-            "no-api": true
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/Gadwinn/psr-http-server-handler",
-            "no-api": true
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/Gadwinn/router",
-            "no-api": true
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/Gadwinn/psr-container",
-            "no-api": true
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/Gadwinn/http-emitter",
-            "no-api": true
-        }
-    ],
     "autoload": {
         "psr-4": {
             "G\\Framework\\": "src/"
@@ -50,11 +23,11 @@
         "psr/http-message": "^1.1 || ^2.0",
         "psr/http-server-handler": "^1.0",
         "psr/http-server-middleware": "^1.0",
-        "gadwinn/psr-http-message": "dev-develop",
-        "gadwinn/psr-http-server-handler": "dev-develop",
-        "gadwinn/router": "dev-develop",
-        "gadwinn/psr-container": "dev-develop",
-        "gadwinn/http-emitter": "dev-develop"
+        "gadwinn/psr-http-message": "^0.1",
+        "gadwinn/psr-http-server-handler": "^0.1",
+        "gadwinn/router": "^0.1",
+        "gadwinn/psr-container": "^0.1",
+        "gadwinn/http-emitter": "^0.1"
     },
     "require-dev": {
         "roave/security-advisories": "dev-latest@dev",
