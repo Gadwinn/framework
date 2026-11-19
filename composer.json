@@ -27,7 +27,7 @@
         "gadwinn/psr-http-server-handler": "^0.1",
         "gadwinn/router": "^0.1",
         "gadwinn/psr-container": "^0.1.1",
-        "gadwinn/http-emitter": "^0.1"
+        "gadwinn/http-emitter": "^0.1 || ^0.2"
     },
     "require-dev": {
         "roave/security-advisories": "dev-latest@dev",
